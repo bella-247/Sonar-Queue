@@ -5,3 +5,4 @@ dist/
 sonarqube-results/
 .scannerwork/
 .env.sonar.local
+*.tgz

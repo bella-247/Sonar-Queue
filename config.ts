@@ -28,20 +28,15 @@ export function findProjectRoot(startDir = process.cwd()): string {
     if (
       fs.existsSync(path.join(current, 'sonar-project.properties')) ||
       fs.existsSync(path.join(current, '.git')) ||
-      fs.existsSync(path.join(current, 'sonar-queue.json'))
+      fs.existsSync(path.join(current, 'sonar-queue.json')) ||
+      fs.existsSync(path.join(current, 'package.json'))
     ) {
       return current;
     }
     current = path.dirname(current);
   }
 
-  // Fallback: check __dirname/../.. if it has package.json or .git
-  const packageParent = path.resolve(__dirname, '../..');
-  if (fs.existsSync(path.join(packageParent, 'package.json'))) {
-    return packageParent;
-  }
-
-  return process.cwd();
+  return path.resolve(startDir);
 }
 
 export function parsePropertiesFile(filePath: string): Record<string, string> {

@@ -7,6 +7,18 @@ import { getConfig } from '../config.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+function findTemplate(relPath: string): string {
+  const candidates = [
+    path.resolve(__dirname, '../templates', relPath),
+    path.resolve(__dirname, '../../templates', relPath),
+    path.resolve(__dirname, '../../../templates', relPath),
+  ];
+  for (const candidate of candidates) {
+    if (fsSync.existsSync(candidate)) return candidate;
+  }
+  return candidates[0];
+}
+
 export async function handleInit(args: string[] = []): Promise<void> {
   const config = getConfig();
   const force = args.includes('--force') || args.includes('-f');
@@ -54,7 +66,7 @@ export async function handleInit(args: string[] = []): Promise<void> {
 
   // 2. Check / create .env.sonar.local.example
   if (!fsSync.existsSync(envExamplePath) || force) {
-    const templateEnvPath = path.join(__dirname, '../templates/.env.sonar.local.template');
+    const templateEnvPath = findTemplate('.env.sonar.local.template');
     let envContent = `# SonarQube Local Authentication\nSONAR_TOKEN=your_sonar_token_here\nSONAR_HOST_URL=http://localhost:9100\n`;
     if (fsSync.existsSync(templateEnvPath)) {
       envContent = await fs.readFile(templateEnvPath, 'utf-8');
@@ -69,7 +81,7 @@ export async function handleInit(args: string[] = []): Promise<void> {
 
   // 3. Check / create sonar-project.properties
   if (!fsSync.existsSync(propPath)) {
-    const templatePropPath = path.join(__dirname, '../templates/sonar-project.properties.template');
+    const templatePropPath = findTemplate('sonar-project.properties.template');
     let propContent = `sonar.projectKey=${config.projectKey}\nsonar.projectName=${config.projectName}\nsonar.sources=src\nsonar.sourceEncoding=UTF-8\nsonar.scm.disabled=true\n`;
     if (fsSync.existsSync(templatePropPath)) {
       const raw = await fs.readFile(templatePropPath, 'utf-8');
@@ -102,7 +114,7 @@ export async function handleInit(args: string[] = []): Promise<void> {
   if (!fsSync.existsSync(skillFile) || force) {
     const skillDir = path.dirname(skillFile);
     await fs.mkdir(skillDir, { recursive: true });
-    const templateSkillPath = path.join(__dirname, '../templates/SKILL.md');
+    const templateSkillPath = findTemplate('SKILL.md');
     if (fsSync.existsSync(templateSkillPath)) {
       await fs.copyFile(templateSkillPath, skillFile);
       console.log(

@@ -15,9 +15,11 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && cp -r templates dist/ 2>/dev/null || true",
+    "prepare": "npm run build",
     "typecheck": "tsc --noEmit",
-    "start": "tsx index.ts"
+    "start": "tsx index.ts",
+    "pack": "npm run build && npm pack"
   },
   "keywords": [
     "sonarqube",
