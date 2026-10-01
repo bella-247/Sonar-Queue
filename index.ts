@@ -9,6 +9,8 @@ import { handleReset } from './commands/reset.js';
 import { handleStatus } from './commands/status.js';
 import { handleExport } from './commands/export.js';
 import { handleInit } from './commands/init.js';
+import { handleDoctor } from './commands/doctor.js';
+import { handleStart, handleStop } from './commands/docker.js';
 import type { AgentState, TrackedIssue } from './types.js';
 
 type CommandHandler = (
@@ -32,20 +34,35 @@ const COMMANDS: Record<string, CommandHandler> = {
 
 function printHelp(): void {
   console.log(`
-Sonar-Queue CLI (Universal SonarQube AI Queue Manager)
-Usage:
-  init [--force]                                   - Bootstrap SonarQube configuration and AI agent skill
-  export                                           - Fetch issues, metrics, and quality gate via REST API
-  sync                                             - Reconcile scan results into queue state
-  status [--file <path>]                           - Show scan overview and queue lifecycle breakdown
-  next [N] [--file <p>] [--rule <r>] [--severity <s>] - View next N prioritized pending issues (read-only)
-  claim <k>                                        - Claim an issue (transitions pending -> investigating)
-  claim-next [N] [--file <p>] [--rule <r>]         - Claim the next N prioritized issues
-  resolve <k> [notes]                              - Mark issue as fixed (awaiting verification scan)
-  wontfix <k> <reason>                             - Mark issue as wont-fix (reason required)
-  falsepositive <k> <reason>                       - Mark issue as false-positive (reason required)
-  defer <k> <reason>                               - Mark issue as deferred (reason required)
-  reset <k>                                        - Reset an investigating/fixed issue to pending
+Sonar-Queue — Token-Optimized SonarQube Queue Manager
+
+Usage: sonar-queue <command> [options]
+
+  Setup:
+    init [--force]                                   Bootstrap SonarQube config and AI skill in current project
+    doctor                                           Check server connectivity, token, scanner, and Docker
+
+  Infrastructure (Docker):
+    start                                            Start local SonarQube via Docker (persists data volumes)
+    stop                                             Stop local SonarQube container (data preserved)
+
+  Data:
+    export                                           Fetch issues, metrics, and quality gate from SonarQube API
+    sync                                             Reconcile scan results into queue state
+
+  Queue (Read-only):
+    status [--file <path>]                           Dense 2-line scan + queue summary
+    next [N] [--file <p>] [--rule <r>] [--severity <s>] [--type <t>]
+                                                     View next N prioritized pending issues
+
+  Queue (State mutation):
+    claim <key>                                      Claim an issue (pending → investigating)
+    claim-next [N] [--file <p>] [--rule <r>]         Claim next N filtered issues
+    resolve <key> [notes]                            Mark issue fixed (awaiting verification)
+    wontfix <key> <reason>                           Mark wont-fix (reason required)
+    falsepositive <key> <reason>                     Mark false-positive (reason required)
+    defer <key> <reason>                             Defer to a future sprint (reason required)
+    reset <key>                                      Reset investigating/fixed back to pending
   `);
 }
 
@@ -64,6 +81,21 @@ async function main(): Promise<void> {
 
   if (command === 'export') {
     await handleExport();
+    return;
+  }
+
+  if (command === 'doctor') {
+    await handleDoctor();
+    return;
+  }
+
+  if (command === 'start') {
+    await handleStart(args);
+    return;
+  }
+
+  if (command === 'stop') {
+    await handleStop();
     return;
   }
 

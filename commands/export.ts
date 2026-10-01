@@ -126,21 +126,26 @@ export async function handleExport(): Promise<void> {
     );
   }
 
-  // 6. Generate AI-readable markdown summary
-  let reportMd = `# SonarQube Analysis — ${config.projectName}\n\n`;
-  reportMd += `## Summary\n\n- Total issues: ${totalIssues}\n\n## Issues\n\n`;
+  // 6. Generate AI-readable dense markdown summary (1 line per issue)
+  const bySeverity: Record<string, number> = {};
+  const byType: Record<string, number> = {};
+  for (const issue of allIssues) {
+    bySeverity[issue.severity] = (bySeverity[issue.severity] || 0) + 1;
+    byType[issue.type] = (byType[issue.type] || 0) + 1;
+  }
+  const sevSummary = Object.entries(bySeverity).map(([k, v]) => `${v} ${k.toLowerCase()}`).join(', ');
+  const typeSummary = Object.entries(byType).map(([k, v]) => `${v} ${k.toLowerCase()}`).join(', ');
+
+  let reportMd = `# SonarQube Analysis — ${config.projectName}\n`;
+  reportMd += `Total: ${totalIssues} | ${sevSummary || 'none'} | ${typeSummary || 'none'}\n\n`;
   if (allIssues.length === 0) {
-    reportMd += 'No issues were reported.\n';
+    reportMd += 'No issues reported.\n';
   } else {
     for (const issue of allIssues) {
-      reportMd += `### ${issue.rule || 'Unknown rule'} — ${issue.severity || 'UNKNOWN'}\n\n`;
-      reportMd += `- **Message:** ${issue.message || 'N/A'}\n`;
-      reportMd += `- **Type:** ${issue.type || 'N/A'}\n`;
-      reportMd += `- **File:** ${issue.component || 'N/A'}\n`;
-      reportMd += `- **Line:** ${issue.line ?? issue.textRange?.startLine ?? 'N/A'}\n`;
-      reportMd += `- **Status:** ${issue.status || 'N/A'}\n`;
-      reportMd += `- **Resolution:** ${issue.resolution || 'N/A'}\n`;
-      reportMd += `- **Effort:** ${issue.effort || 'N/A'}\n\n`;
+      const file = issue.component.includes(':') ? issue.component.split(':').slice(1).join(':') : issue.component;
+      const line = issue.line ?? issue.textRange?.startLine ?? '';
+      const loc = line ? `${file}:${line}` : file;
+      reportMd += `[${issue.key}] ${issue.severity} ${issue.type} | ${loc} | ${issue.rule} — ${issue.message}\n`;
     }
   }
 
