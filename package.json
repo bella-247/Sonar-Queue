@@ -1,0 +1,36 @@
+{
+  "name": "sonar-queue",
+  "version": "1.0.0",
+  "description": "Token-optimized SonarQube queue manager and AI agent remediation engine",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "sonar-queue": "./bin/sonar-queue.js"
+  },
+  "files": [
+    "dist",
+    "bin",
+    "templates",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "start": "tsx index.ts"
+  },
+  "keywords": [
+    "sonarqube",
+    "code-quality",
+    "ai-agent",
+    "remediation-queue",
+    "token-optimization"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.8.2"
+  }
+}
