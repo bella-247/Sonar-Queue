@@ -1,6 +1,6 @@
 {
   "name": "sonar-queue",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Token-optimized SonarQube queue manager and issue resolution engine",
   "type": "module",
   "main": "./dist/index.js",
@@ -34,11 +34,13 @@
     "pack": "npm run build && npm pack"
   },
   "keywords": [
+    "sonar-queue",
     "sonarqube",
     "code-quality",
     "ai-agent",
     "resolution-queue",
-    "token-optimization"
+    "token-optimization",
+    "cli",
   ],
   "author": "Abel Mekonen <abelmekonen247@gmail.com>",
   "license": "MIT",

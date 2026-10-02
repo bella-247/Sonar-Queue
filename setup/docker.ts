@@ -8,6 +8,7 @@ import { getConfig } from './config.js';
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const CONTAINER_NAME = 'sonarqube';
+const DB_CONTAINER_NAME = 'sonarqube-db';
 const DEFAULT_PORT = 9100;
 const SONARQUBE_VERSION = '26.9.0.129388-community';
 const SONARQUBE_DIR = path.join(os.homedir(), '.local', 'share', 'sonar-queue');
@@ -119,22 +120,26 @@ function composeAvailable(): boolean {
   }
 }
 
-function containerStatus(): 'running' | 'stopped' | 'none' {
+function getContainerState(name: string): 'running' | 'stopped' | 'none' {
   try {
-    const running = execDocker(
-      ['ps', '--filter', `name=^${CONTAINER_NAME}$`, '--format', '{{.Names}}'],
-      { encoding: 'utf-8', timeout: 3000 }
-    );
-    if ((running.stdout || '').trim().includes(CONTAINER_NAME)) return 'running';
-
-    const all = execDocker(
-      ['ps', '-a', '--filter', `name=^${CONTAINER_NAME}$`, '--format', '{{.Names}}'],
-      { encoding: 'utf-8', timeout: 3000 }
-    );
-    if ((all.stdout || '').trim().includes(CONTAINER_NAME)) return 'stopped';
+    const res = execDocker(['inspect', '--format', '{{.State.Status}}', name], {
+      encoding: 'utf-8',
+      timeout: 3000,
+    });
+    if (res.status !== 0) return 'none';
+    const status = (res.stdout || '').trim().toLowerCase();
+    if (status === 'running') return 'running';
+    return 'stopped';
   } catch {
-    // docker unavailable
+    return 'none';
   }
+}
+
+function containerStatus(): 'running' | 'stopped' | 'none' {
+  const app = getContainerState(CONTAINER_NAME);
+  const db = getContainerState(DB_CONTAINER_NAME);
+  if (app === 'running' && db === 'running') return 'running';
+  if (app !== 'none' || db !== 'none') return 'stopped';
   return 'none';
 }
 
@@ -166,30 +171,69 @@ export function handleStart(_args: string[]): void {
     return;
   }
 
-  if (!composeAvailable()) {
-    console.error('Error: Docker Compose (v2) not available.');
-    console.error('Update Docker or install the Compose plugin.');
-    process.exitCode = 1;
-    return;
-  }
-
   const config = getConfig();
   const port = getPort();
-  const status = containerStatus();
+  const appState = getContainerState(CONTAINER_NAME);
+  const dbState = getContainerState(DB_CONTAINER_NAME);
 
-  if (status === 'running') {
+  if (appState === 'running' && dbState === 'running') {
     console.log(`SonarQube already running at ${config.hostUrl}`);
     return;
   }
 
   console.log('Starting SonarQube...\n');
-  ensureComposeFile(port);
 
-  const code = runCompose(['up', '-d']);
-  if (code !== 0) {
-    console.error('\nFailed to start SonarQube.');
+  // If both containers already exist, start them directly instead of recreating
+  if (appState !== 'none' && dbState !== 'none') {
+    if (dbState !== 'running') {
+      const res = execDocker(['start', DB_CONTAINER_NAME], {
+        encoding: 'utf-8',
+        stdio: 'inherit',
+      });
+      if (res.status !== 0) {
+        console.error(`\nFailed to start ${DB_CONTAINER_NAME} container.`);
+        process.exitCode = 1;
+        return;
+      }
+    }
+
+    if (appState !== 'running') {
+      const res = execDocker(['start', CONTAINER_NAME], {
+        encoding: 'utf-8',
+        stdio: 'inherit',
+      });
+      if (res.status !== 0) {
+        console.error(`\nFailed to start ${CONTAINER_NAME} container.`);
+        process.exitCode = 1;
+        return;
+      }
+    }
+  } else if (appState !== 'none' || dbState !== 'none') {
+    // Only one container exists
+    const existing = appState !== 'none' ? CONTAINER_NAME : DB_CONTAINER_NAME;
+    const missing = appState !== 'none' ? DB_CONTAINER_NAME : CONTAINER_NAME;
+    console.error(`Conflict: Container "${existing}" already exists, but "${missing}" does not.`);
+    console.error(`To re-provision cleanly, run: sonar-queue docker-reset && sonar-queue start`);
+    console.error(`Or remove the conflicting container: docker rm -f ${existing}`);
     process.exitCode = 1;
     return;
+  } else {
+    // Neither container exists — provision via Docker Compose
+    if (!composeAvailable()) {
+      console.error('Error: Docker Compose (v2) not available.');
+      console.error('Update Docker or install the Compose plugin.');
+      process.exitCode = 1;
+      return;
+    }
+
+    ensureComposeFile(port);
+
+    const code = runCompose(['up', '-d']);
+    if (code !== 0) {
+      console.error('\nFailed to start SonarQube.');
+      process.exitCode = 1;
+      return;
+    }
   }
 
   console.log('');
@@ -207,30 +251,33 @@ export function handleStop(): void {
     return;
   }
 
-  const status = containerStatus();
-  if (status === 'none') {
+  const appState = getContainerState(CONTAINER_NAME);
+  const dbState = getContainerState(DB_CONTAINER_NAME);
+
+  if (appState === 'none' && dbState === 'none') {
     console.log('No SonarQube container found.');
     return;
   }
-  if (status === 'stopped') {
+  if (appState === 'stopped' && dbState === 'stopped') {
     console.log('SonarQube is already stopped.');
     return;
   }
 
-  if (!fs.existsSync(COMPOSE_FILE)) {
-    // Fallback: plain docker stop
-    execDocker(['stop', CONTAINER_NAME], { encoding: 'utf-8', stdio: 'inherit' });
-    console.log('SonarQube stopped. Persistent data preserved.');
-    return;
+  console.log('Stopping SonarQube...');
+
+  const toStop: string[] = [];
+  if (appState === 'running') toStop.push(CONTAINER_NAME);
+  if (dbState === 'running') toStop.push(DB_CONTAINER_NAME);
+
+  if (toStop.length > 0) {
+    const res = execDocker(['stop', ...toStop], { encoding: 'utf-8', stdio: 'inherit' });
+    if (res.status !== 0) {
+      console.error('Failed to stop SonarQube.');
+      process.exitCode = 1;
+      return;
+    }
   }
 
-  console.log('Stopping SonarQube...');
-  const code = runCompose(['stop']);
-  if (code !== 0) {
-    console.error('Failed to stop SonarQube.');
-    process.exitCode = 1;
-    return;
-  }
   console.log('');
   console.log('SonarQube stopped.');
   console.log('Persistent data preserved. (volumes: sonarqube_db, sonarqube_data, …)');
@@ -275,17 +322,17 @@ export async function handleReset(_args: string[]): Promise<void> {
 
   if (fs.existsSync(COMPOSE_FILE)) {
     runCompose(['down', '-v']);
-  } else {
-    execDocker(['stop', CONTAINER_NAME], { encoding: 'utf-8', stdio: 'inherit' });
-    execDocker(['rm', CONTAINER_NAME], { encoding: 'utf-8', stdio: 'inherit' });
-    for (const vol of [
-      'sonarqube_db',
-      'sonarqube_data',
-      'sonarqube_extensions',
-      'sonarqube_logs',
-    ]) {
-      execDocker(['volume', 'rm', vol], { encoding: 'utf-8', stdio: 'inherit' });
-    }
+  }
+
+  execDocker(['stop', CONTAINER_NAME, DB_CONTAINER_NAME], { encoding: 'utf-8' });
+  execDocker(['rm', '-f', CONTAINER_NAME, DB_CONTAINER_NAME], { encoding: 'utf-8' });
+  for (const vol of [
+    'sonarqube_db',
+    'sonarqube_data',
+    'sonarqube_extensions',
+    'sonarqube_logs',
+  ]) {
+    execDocker(['volume', 'rm', '-f', vol], { encoding: 'utf-8' });
   }
 
   if (fs.existsSync(COMPOSE_FILE)) {
@@ -302,11 +349,13 @@ export function handleDockerStatus(): void {
     return;
   }
 
-  const status = containerStatus();
+  const appState = getContainerState(CONTAINER_NAME);
+  const dbState = getContainerState(DB_CONTAINER_NAME);
   const config = getConfig();
 
-  console.log(`SonarQube container: ${status}`);
-  if (status === 'running') {
+  console.log(`SonarQube container:  ${appState}`);
+  console.log(`PostgreSQL container: ${dbState}`);
+  if (appState === 'running') {
     console.log(`URL: ${config.hostUrl}`);
     // Show uptime from docker inspect
     try {
