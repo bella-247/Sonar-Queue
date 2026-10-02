@@ -1,129 +1,225 @@
-# Sonar-Queue — Token-Optimized SonarQube Queue & AI Remediation Engine
+# Sonar Queue
 
-A production-grade CLI and queue management engine designed for AI coding agents and engineering teams to remediate SonarQube findings systematically, without blowing up LLM context windows or corrupting project state.
+<div align="center">
+
+**A systematic AI agent remediation engine and local developer tool for SonarQube.**
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Node: >=18](https://img.shields.io/badge/Node-%3E%3D18-brightgreen.svg)](https://nodejs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue.svg)](https://www.typescriptlang.org/)
+[![Zero Dependencies](https://img.shields.io/badge/Dependencies-0-orange.svg)](package.json)
+
+*Token-efficient queue management, claim tracking, Docker container orchestration, and automated fix verification for AI agents and engineering teams.*
+
+</div>
 
 ---
 
-## ⚡ The Problem Sonar-Queue Solves
+## ⚡ The Problem
 
-When AI coding agents (Claude, Antigravity, Cursor, Codex) work on SonarQube issues:
-1. **Token Exhaustion**: Raw Sonar output files (`issues.json`, `report.md`) often contain thousands of lines. An agent reading these directly burns tens of thousands of tokens per turn.
-2. **Scanner Log Slurping**: Running `sonar-scanner` CLI autonomously floods the conversation with hundreds of lines of maven/scanner output.
-3. **State Corruption & Lost Progress**: Asking agents to update JSON files with `jq` or ad-hoc scripts leads to broken formatting, dropped issues, and lost tracking when sessions reset.
-4. **No Lifecycle Discipline**: Without explicit issue states, agents repeat fixes on the same issues or falsely claim resolution without verification.
+When coding agents (Claude, Cursor, OpenCode, Antigravity) work directly with SonarQube, two major bottlenecks emerge:
+
+1. **Context Window Flooding (The Token Tax)**:
+   A standard SonarQube analysis export contains hundreds of issues with ~30 metadata fields each (flows, hashes, debt, AST locations). Ingesting this burns **30,000–50,000 tokens** per turn, causing inference latency spikes, high API costs, and context amnesia.
+2. **Missing Remediation Lifecycle**:
+   SonarQube is an *analysis engine*, not a *workflow coordinator*. It has no server-side concept of:
+   - Who claimed an issue (`investigating`)
+   - How many fix attempts have occurred (`attempts: 2`)
+   - Issues pending verification (`awaiting-scan`)
+   - Postponing legacy refactors (`defer`)
+   - True verification (checking if a fix actually resolved the issue after a rescan)
 
 ---
 
-## 🎯 How Sonar-Queue Solves It
+## 🎯 The Solution: Sonar Queue
+
+`sonar-queue` sits between SonarQube and your coding agent as a **local remediation workflow engine**:
 
 ```text
-  SonarQube Server (Local / Remote)
-                │
-                ▼ (REST API / export)
-      sonarqube-results/issues.json
-                │
-                ▼ (reconcile / priority sort)
-        [sonar-queue CLI]
-                │
-    ┌───────────┴───────────┐
-    ▼                       ▼
-Ultra-Dense CLI Views   Persistent Queue Lifecycle
-"next 5" (1 line/issue)  pending → investigating → fixed → verified
-"status" (2-line total)     └── [reopen if scan fails]
+ ┌───────────────────────┐
+ │ SonarQube Server/Cloud│  Analysis Truth (Issues, Rules, Metrics)
+ └───────────┬───────────┘
+             │ Lean ~7-field fetch
+             ▼
+ ┌───────────────────────┐
+ │      SONAR QUEUE      │  Remediation Truth (agent-state.json)
+ │  • Priority Heuristic │  - File-cohesion & severity sorting
+ │  • Claim & Lock       │  - Tracks attempts, timestamps, notes
+ │  • Zero-Slurp Engine  │  - Formats issues into dense ~35-token lines
+ │  • Verification Loop  │  - Reconciles fixes, auto-reopens regressions
+ │  • Docker Lifecycle   │  - Compose + PostgreSQL 15 orchestrator
+ └───────────┬───────────┘
+             │ Dense ~35 tokens/issue
+             ▼
+ ┌───────────────────────┐
+ │  AI Agent / Developer │  (Cursor, Claude Desktop, Terminal, CI)
+ └───────────────────────┘
 ```
 
-- **90% Token Reduction**: Issues are queried in prioritized single-line summaries (`[KEY] CRITICAL BUG | file:line | rule`). Status is a dense 2-line dual summary.
-- **Strict 7-State Lifecycle**: `pending` → `investigating` → `fixed` → `verified`, plus documented exceptions: `wont-fix`, `false-positive`, `deferred`.
-- **Automated Regression Reopening**: If an agent marks an issue `fixed`, but a subsequent scan still reports it, the issue is automatically reopened to `pending`, attempts are incremented, and failure notes are appended.
-- **Zero Autonomous Scans**: Agents work strictly from the queued findings. Scans are run by humans or explicitly requested.
+- **98% Token Reduction (The Zero-Slurp Law)**: Instead of multi-megabyte JSON dumps, issues are served in prioritized ~35-token lines.
+- **File-Cohesive Grouping**: Groups issues by source file so agents fix entire files in a single pass, eliminating context thrashing.
+- **7-State Lifecycle**: `pending` → `investigating` → `fixed` → `verified`, with explicit audit tracking for `wont-fix`, `false-positive`, and `deferred`.
+- **Automated Regression Reopening**: If code is modified and marked `fixed`, but the next scan still detects the violation, `sonar-queue` automatically reopens the issue (`attempts += 1`) and logs the regression.
+- **Turnkey Docker Stack**: Built-in Docker Compose + PostgreSQL 15 manager to spin up a local SonarQube instance with persistent storage in seconds.
 
 ---
 
-## 🚀 Quick Start (In Any Project)
+## 🚀 Quick Start
 
-### 1. Initialize in a New Project
-Run inside any project root:
-
+### 1. Check Environment Health
 ```bash
-npx tsx path/to/sonar-manager/index.ts init
-# or if installed as npm package:
-# npx sonar-queue init
+npx sonar-queue doctor
 ```
+Verifies your OS, Node.js (>=18), Docker, Docker Compose, SonarScanner CLI, and network reachability.
 
-This bootstraps:
-- `sonar-project.properties` (with clean defaults for your project)
-- `.env.sonar.local.example` (for your SonarQube token and host)
-- `.agents/skills/sonar-scanner/SKILL.md` (AI agent skill instructions)
-- `.gitignore` entries for `.scannerwork/` and `.env.sonar.local`
-- `sonarqube-results/` directory
-
-### 2. Configure Token
-Copy `.env.sonar.local.example` to `.env.sonar.local`:
+### 2. Start Local SonarQube (Optional)
+If you don't have a SonarQube instance running:
 ```bash
-cp .env.sonar.local.example .env.sonar.local
+npx sonar-queue start
 ```
-Add your SonarQube user token:
-```ini
-SONAR_TOKEN=sqp_your_personal_token_here
-SONAR_HOST_URL=http://localhost:9100
-```
+Spawns an isolated SonarQube Community + PostgreSQL 15 container at `http://localhost:9100` with data stored safely in `~/.local/share/sonar-queue/`.
 
-### 3. Export Scan Results & Sync
-After running your project's SonarQube scan:
+### 3. Initialize & Configure Your Project
+Run in your project root:
 ```bash
-# Fetch from SonarQube API directly (pure TypeScript, cross-platform)
-npx sonar-queue export
+npx sonar-queue setup
+```
+The interactive wizard:
+- Auto-detects your stack (TypeScript, React, Vite, Vitest, Jest, etc.).
+- Prompts for your project key, project name, and SonarQube token (`sqp_...`).
+- Validates the token against the live server.
+- Generates tailored `sonar-project.properties` and `.env.sonar.local`.
 
-# Reconcile issues into queue state
+*(Alternatively, run `npx sonar-queue init` for non-interactive template bootstrapping).*
+
+### 4. Scan & Sync Live Issues
+```bash
+# Run SonarScanner with automatic token injection
+npx sonar-queue scan
+
+# Reconcile scan results into the local queue
 npx sonar-queue sync
 ```
 
 ---
 
-## 📖 CLI Commands Reference
+## 🔄 The Remediation Workflow
 
-| Command | Scope | Description |
-| :--- | :--- | :--- |
-| `init` | Setup | Bootstrap SonarQube configuration and AI agent skill in the current project |
-| `export` | Network | Fetch issues, metrics, and quality gate directly from SonarQube REST API |
-| `sync` | State | Reconcile scan results into `agent-state.json`, detecting verified fixes and regressions |
-| `status [--file <path>]` | Read-only | Show 2-line dual summary (optionally scoped to a path or module) |
-| `next [N] [--file <p>] [--rule <r>] [--severity <s>]` | Read-only | View next N prioritized pending issues (supports file, rule, severity filters) |
-| `claim <key>` | State | Explicitly claim an issue (transitions `pending` $\rightarrow$ `investigating`) |
-| `claim-next [N] [--file <p>] [--rule <r>]` | State | Claim the next N prioritized issues matching filter |
-| `resolve <key> [notes]` | State | Mark issue as `fixed` (awaiting verification scan) |
-| `wontfix <key> <reason>` | State | Mark issue as `wont-fix` (technical justification required) |
-| `falsepositive <key> <res>` | State | Mark issue as `false-positive` (technical justification required) |
-| `defer <key> <reason>` | State | Mark issue as `deferred` (technical justification required) |
-| `reset <key>` | State | Reset an `investigating` or `fixed` issue back to `pending` |
+### 1. View Status
+```bash
+npx sonar-queue status
+```
+```text
+Issues: 12 active (2 blocker, 4 major | 6 code_smell), 5 verified
+Queue:  8 pending, 2 investigating, 2 fixed, 5 verified, 0 wont-fix, 0 fp, 0 deferred (17 total)
+```
+
+### 2. Peek & Claim Prioritized Issues
+```bash
+# View the next 5 prioritized issues
+npx sonar-queue next 5
+
+# View next issues in a specific file
+npx sonar-queue next 5 --file src/auth/login.ts
+
+# Claim the highest-priority issue
+npx sonar-queue claim AX123456789
+```
+Output:
+```text
+[AX123456789] CRITICAL BUG | src/auth/login.ts:42 | typescript:S1874 (attempt #1)
+  'deprecatedAuthMethod' is deprecated and will be removed in next major release.
+```
+
+### 3. Fix Code & Mark Resolved
+Once the agent or developer fixes the code locally:
+```bash
+npx sonar-queue resolve AX123456789 "Migrated to new authProvider API"
+```
+
+*(Or mark with audited justifications:)*
+```bash
+npx sonar-queue wontfix AX123456789 "Architectural decision approved in ADR-042"
+npx sonar-queue falsepositive AX123456789 "Static analyzer misinterprets type narrowing"
+npx sonar-queue defer AX123456789 "Requires database schema migration in Q3"
+```
+
+### 4. Verify Fixes
+Run a fresh scan and sync:
+```bash
+npx sonar-queue scan && npx sonar-queue sync
+```
+- **If fixed**: Automatically marked `verified`!
+- **If regression occurs**: Automatically reopened with `[Reopened] Attempt #2 failed: still open in scan.`
 
 ---
 
-## ⚙️ Configuration & Environment Variables
+## 📖 CLI Command Reference
 
-Sonar-Queue auto-discovers settings from:
-1. `sonar-project.properties` in project root (`sonar.projectKey`, `sonar.projectName`, `sonar.host.url`)
-2. `.env.sonar.local` in project root (`SONAR_TOKEN`, `SONAR_HOST_URL`, `SONAR_PROJECT_KEY`)
-3. Optional `sonar-queue.json` in project root
-4. Environment variables:
+### Setup & Diagnostics
+| Command | Description |
+| :--- | :--- |
+| `sonar-queue doctor` | Comprehensive diagnostic check of Node, Docker, containers, scanner CLI, and credentials |
+| `sonar-queue setup` | Interactive project onboarding wizard (auto-stack detection & token validation) |
+| `sonar-queue init [--force]` | Non-interactive bootstrapper (installs templates & AI skill) |
 
-| Variable | Default | Purpose |
-| :--- | :--- | :--- |
-| `SONAR_PROJECT_KEY` | Auto-detected from properties/package.json | SonarQube project key |
-| `SONAR_PROJECT_NAME`| Auto-detected from properties | Display name |
-| `SONAR_HOST_URL` | `http://localhost:9100` | SonarQube server URL |
-| `SONAR_TOKEN` | Read from `.env.sonar.local` | SonarQube user authentication token |
-| `SONAR_RESULTS_DIR` | `./sonarqube-results` | Output directory for issue data |
-| `SONAR_PROJECT_ROOT`| Auto-detected from `.git` / properties | Project root directory |
+### Infrastructure (Docker Compose + PostgreSQL)
+| Command | Description |
+| :--- | :--- |
+| `sonar-queue start` | Start SonarQube + PostgreSQL 15 containers via Docker Compose |
+| `sonar-queue stop` | Stop containers (all persistent data preserved) |
+| `sonar-queue restart` | Restart containers |
+| `sonar-queue docker-status` | Display container health and uptime |
+| `sonar-queue docker-reset` | ⚠ Irreversibly destroy all containers and volumes (requires confirmation) |
+
+### Analysis & Sync
+| Command | Description |
+| :--- | :--- |
+| `sonar-queue scan [...args]` | Execute `sonar-scanner` with automatic token injection |
+| `sonar-queue sync` | Wait for server CE task and reconcile live issues into `agent-state.json` |
+| `sonar-queue export` | Fetch lean issues from SonarQube and sync directly to queue |
+
+### Queue & Remediation
+| Command | Description |
+| :--- | :--- |
+| `sonar-queue status [--file <p>]` | Dense 2-line dual summary of active issues and remediation queue state |
+| `sonar-queue next [N] [--file <p>]` | Peek at next N prioritized pending issues without mutating state |
+| `sonar-queue claim <key>` | Claim an issue (`pending` $\rightarrow$ `investigating`), increments attempt counter |
+| `sonar-queue claim-next [N]` | Atomically claim next N filtered issues |
+| `sonar-queue resolve <key> [note]` | Mark issue fixed (transitions to awaiting verification) |
+| `sonar-queue wontfix <key> <reason>` | Mark wont-fix locally with mandatory technical audit reason |
+| `sonar-queue falsepositive <key> <res>` | Mark false-positive locally with mandatory reason |
+| `sonar-queue defer <key> <reason>` | Defer issue to future milestone with reason |
+| `sonar-queue reset <key>` | Revert an `investigating` or `fixed` issue back to `pending` |
 
 ---
 
-## 🤖 AI Agent Workflow
+## 🤖 AI Agent Integration
 
-When pairing with AI coding agents:
-1. Agent reads `npx sonar-queue next 5` (costs ~100 tokens, not 5,000).
-2. Agent claims an issue: `npx sonar-queue claim <key>`.
-3. Agent reads only the target source file around the specified line number.
-4. Agent applies architectural fix and verifies locally (`npm run typecheck && npm test`).
-5. Agent marks resolved: `npx sonar-queue resolve <key> "Refactored to reduce complexity"`.
-6. Human runs scan when ready $\rightarrow$ `npx sonar-queue export && npx sonar-queue sync` verifies fixes.
+`sonar-queue init` automatically installs an agent skill at:
+```text
+.agents/skills/sonar-scanner/SKILL.md
+```
+This skill works natively with **Cursor**, **Claude Code**, **OpenCode**, and **Antigravity**. It instructs agents to:
+- Enforce the **Zero-Slurp Law** (never read entire state dumps).
+- Query prioritized issues file-by-file (`sonar-queue next 5 --file <path>`).
+- Run targeted local tests before declaring an issue fixed.
+- Resolve issues systematically through the queue CLI.
+
+---
+
+## 📊 Token Efficiency: Raw Sonar vs. Sonar Queue
+
+| Metric | Raw SonarQube JSON / MCP | Sonar Queue CLI |
+| :--- | :--- | :--- |
+| **Payload per issue** | ~30 fields (AST ranges, debt, hashes) | **7 fields** (`key`, `rule`, `file`, `line`, `severity`, `type`, `message`) |
+| **Tokens for 20 issues** | ~12,000 – 18,000 tokens | **~700 tokens** (96% savings) |
+| **Remediation State** | ❌ None (stateless) | ✅ Claims, attempts, timestamps, notes |
+| **Regression Detection**| ❌ Manual | ✅ Automated post-scan verification |
+| **Grouping Heuristic** | ❌ Arbitrary database order | ✅ Priority sort by severity + file cohesion |
+
+---
+
+## 📄 License
+
+[MIT](LICENSE) © 2026 Abel Mekonen
