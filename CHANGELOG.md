@@ -6,35 +6,17 @@ Format: [Semantic Versioning](https://semver.org/). Sections: Added, Changed, Fi
 
 ---
 
-## [1.1.0] — Unreleased
+## [1.0.0] — 2026-10-02
 
 ### Added
-- `doctor` command: checks Node.js version, `sonar-project.properties`, sonar-scanner in PATH, Docker presence, SonarQube container status, server reachability, and token validity
-- `start` command: creates and starts a local SonarQube Docker container with named data/logs/extensions volumes (persistent across restarts)
-- `stop` command: gracefully stops SonarQube container without destroying data volumes
-- `--type` filter on `next` and `claim-next` (e.g. `--type BUG`)
-- Dense 1-line-per-issue format for `export` report.md (replaces verbose 7-line blocks — critical for large codebases)
-
-### Changed
-- `help` output reorganized into logical sections: Setup, Infrastructure, Data, Queue
-- `export` report.md now generates a summary header (`Total: N | X critical, Y major | A bug, B code_smell`) followed by dense `[KEY] SEV TYPE | file:line | rule — message` lines
-
-### Fixed
-- Docker container filter now uses exact name match to avoid matching `sonarqube-db` alongside `sonarqube`
-- SonarQube ping check is now HTTP-status-aware (SonarQube 10.x returns HTTP 200 with empty body, not `pong`)
-
----
-
-## [1.0.0] — 2026-10-01
-
-### Added
-- Full 7-state issue lifecycle: `pending` → `investigating` → `fixed` → `verified`, plus `wont-fix`, `false-positive`, `deferred`
-- `init [--force]`: bootstraps `sonar-project.properties`, `.env.sonar.local.example`, AI skill, and `.gitignore` entries with full idempotency
-- `export`: paginated SonarQube REST API fetch with metrics and quality gate
-- `sync`: reconciles scan results into queue state, auto-reopens regressions
-- `status [--file]`: dense 2-line dual summary (scan breakdown + queue lifecycle)
-- `next [N] [--file] [--rule] [--severity]`: token-optimized prioritized issue view
-- `claim`, `claim-next`, `resolve`, `wontfix`, `falsepositive`, `defer`, `reset`: full lifecycle commands
-- AI agent skill template (`SKILL.md`) installed into `.agents/skills/sonar-scanner/`
-- Config auto-discovery from `sonar-project.properties`, `.env.sonar.local`, `sonar-queue.json`, and environment variables
-- Cross-platform Node.js implementation (no shell dependencies)
+- **Full 7-state issue lifecycle**: `pending` → `investigating` → `fixed` → `verified`, plus audited `wont-fix`, `false-positive`, and `deferred` states.
+- **Zero-Slurp token-optimized issue inspection**: `next` and `claim-next` with `--file`, `--rule`, `--severity`, and `--type` filtering (~35 tokens per issue).
+- **Automated regression reopening**: Sync reconciles live scan results, auto-detects unverified fixes, increments attempt counts, and logs regressions.
+- **Interactive project wizard (`setup`)**: Automatically detects stack (TypeScript, React, Next.js, Jest, Vitest, Python, Go, Java), tests SonarQube credentials live, and writes configuration.
+- **Non-interactive bootstrapper (`init`)**: Installs templates and agent protocol with `--force` support.
+- **Environment & health diagnostics (`doctor`)**: Validates Node.js (>=18), Docker, Compose, SonarScanner CLI, network reachability, and auth tokens.
+- **Docker Compose & PostgreSQL manager**: `start`, `stop`, `restart`, `docker-status`, and `docker-reset` for seamless local SonarQube orchestration with persistent storage.
+- **SonarScanner execution (`scan`)**: Runs analysis with automatic local credential and configuration injection.
+- **Export & reporting (`export`)**: Fetches lean SonarQube findings and generates a dense single-line markdown summary report.
+- **AI Agent Skill protocol (`SKILL.md`)**: Production-grade resolution instructions tailored for Claude, Cursor, Antigravity, and OpenCode.
+- **Zero runtime dependencies**: Pure Node.js standard library implementation.

@@ -4,7 +4,7 @@ description: 'Systematic SonarQube queue management and batch resolution engine 
 license: MIT
 metadata:
   author: engineering
-  version: "1.1.0"
+  version: "1.0.0"
 ---
 
 # /sonar-scanner — Universal SonarQube Resolution Engine
