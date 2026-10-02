@@ -64,7 +64,7 @@ Usage: sonar-queue <command> [options]
 
 Data & Queue (Read-only):
     status [--file <path>]                          Dense queue lifecycle summary
-    next [N] [--file <p>] [--rule <r>] [--severity ] [--type <t>]
+    next [N] [--file <p>] [--rule <r>] [--severity <s>] [--type <t>]
                                                     View next N prioritized pending issues
 
   Queue (State mutation):

@@ -65,8 +65,8 @@ export function handleNext(stateMap: Map<string, TrackedIssue>, args: string[]):
   }
 
   for (const issue of pendingIssues) {
-    const file = issue.file
-    const line = issue.line ?? "N/A"
+    const file = issue.file;
+    const line = issue.line ?? 'N/A';
     const loc = `${file}:${line}`;
     const attemptInfo = issue.attempts > 0 ? ` (attempt #${issue.attempts})` : '';
     console.log(`[${issue.issueKey}] ${issue.severity} ${issue.type} | ${loc} | ${issue.rule}${attemptInfo}`);

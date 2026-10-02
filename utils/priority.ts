@@ -25,5 +25,7 @@ export function compareIssuesPriority(a: TrackedIssue, b: TrackedIssue): number 
   if (sevDiff !== 0) return sevDiff;
   const typeDiff = (TYPE_WEIGHT[b.type] || 0) - (TYPE_WEIGHT[a.type] || 0);
   if (typeDiff !== 0) return typeDiff;
-  return (a.file || a.component || '').localeCompare(b.file || b.component || '');
+  const fileDiff = (a.file || a.component || '').localeCompare(b.file || b.component || '');
+  if (fileDiff !== 0) return fileDiff;
+  return (a.line ?? 0) - (b.line ?? 0);
 }

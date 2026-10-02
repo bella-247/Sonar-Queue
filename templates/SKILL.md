@@ -37,12 +37,12 @@ A production-grade, token-optimized protocol for analyzing SonarQube findings, c
 
 ## 2. CLI Command Quick Reference
 
-Use `npx sonar-queue <command>` (or `npx tsx scripts/sonar-manager/index.ts <command>` if in-repo):
+Use `npx sonar-queue <command>`:
 
 | Command | Scope | Description |
 | :--- | :--- | :--- |
 | `status [--file <p>]` | Read-only | Dense 2-line summary: Queue lifecycle |
-| `next [N] [--file <p>] [--rule <r>] [--severity ]` | Read-only | Peek at next N prioritized pending issues without mutating state |
+| `next [N] [--file <p>] [--rule <r>] [--severity <s>] [--type <t>]` | Read-only | Peek at next N prioritized pending issues without mutating state |
 | `claim <key>` | State mutation | Claim single issue (`pending` $\rightarrow$ `investigating`), increments attempts |
 | `claim-next [N] [--file <p>]` | State mutation | Atomically claim next N filtered issues |
 | `resolve <key> [notes]` | State mutation | Mark issue as `fixed` (awaiting verification scan) |
