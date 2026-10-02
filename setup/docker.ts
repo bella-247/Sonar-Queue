@@ -163,6 +163,85 @@ function runCompose(composeArgs: string[]): number | null {
 
 // ─── Handlers ─────────────────────────────────────────────────────────────────
 
+function startContainer(name: string): boolean {
+  const res = execDocker(['start', name], {
+    encoding: 'utf-8',
+    stdio: 'inherit',
+  });
+  if (res.status !== 0) {
+    console.error(`\nFailed to start ${name} container.`);
+    process.exitCode = 1;
+    return false;
+  }
+  return true;
+}
+
+function startExistingContainers(
+  appState: 'running' | 'stopped' | 'none',
+  dbState: 'running' | 'stopped' | 'none'
+): boolean {
+  if (dbState !== 'running' && !startContainer(DB_CONTAINER_NAME)) {
+    return false;
+  }
+  if (appState !== 'running' && !startContainer(CONTAINER_NAME)) {
+    return false;
+  }
+  return true;
+}
+
+function handleContainerConflict(appState: 'running' | 'stopped' | 'none'): void {
+  const existing = appState !== 'none' ? CONTAINER_NAME : DB_CONTAINER_NAME;
+  const missing = appState !== 'none' ? DB_CONTAINER_NAME : CONTAINER_NAME;
+  console.error(`Conflict: Container "${existing}" already exists, but "${missing}" does not.`);
+  console.error('To re-provision cleanly, run: sonar-queue docker-reset && sonar-queue start');
+  console.error(`Or remove the conflicting container: docker rm -f ${existing}`);
+  process.exitCode = 1;
+}
+
+function provisionWithCompose(): boolean {
+  if (!composeAvailable()) {
+    console.error('Error: Docker Compose (v2) not available.');
+    console.error('Update Docker or install the Compose plugin.');
+    process.exitCode = 1;
+    return false;
+  }
+
+  ensureComposeFile(getPort());
+
+  const code = runCompose(['up', '-d']);
+  if (code !== 0) {
+    console.error('\nFailed to start SonarQube.');
+    process.exitCode = 1;
+    return false;
+  }
+  return true;
+}
+
+function startSonarQube(
+  appState: 'running' | 'stopped' | 'none',
+  dbState: 'running' | 'stopped' | 'none'
+): boolean {
+  if (appState !== 'none' && dbState !== 'none') {
+    return startExistingContainers(appState, dbState);
+  }
+
+  if (appState !== 'none' || dbState !== 'none') {
+    handleContainerConflict(appState);
+    return false;
+  }
+
+  return provisionWithCompose();
+}
+
+function printStartupBanner(hostUrl: string): void {
+  console.log('');
+  console.log(`SonarQube starting at ${hostUrl}`);
+  console.log('  → PostgreSQL: internal Docker network (not exposed to host)');
+  console.log(`  → SonarQube:  ${hostUrl}  (may take 30–60 s to be ready)`);
+  console.log('');
+  console.log('Check readiness:   sonar-queue doctor');
+}
+
 export function handleStart(_args: string[]): void {
   if (!dockerAvailable()) {
     console.error('Error: Docker not found in PATH.');
@@ -172,7 +251,6 @@ export function handleStart(_args: string[]): void {
   }
 
   const config = getConfig();
-  const port = getPort();
   const appState = getContainerState(CONTAINER_NAME);
   const dbState = getContainerState(DB_CONTAINER_NAME);
 
@@ -183,66 +261,13 @@ export function handleStart(_args: string[]): void {
 
   console.log('Starting SonarQube...\n');
 
-  // If both containers already exist, start them directly instead of recreating
-  if (appState !== 'none' && dbState !== 'none') {
-    if (dbState !== 'running') {
-      const res = execDocker(['start', DB_CONTAINER_NAME], {
-        encoding: 'utf-8',
-        stdio: 'inherit',
-      });
-      if (res.status !== 0) {
-        console.error(`\nFailed to start ${DB_CONTAINER_NAME} container.`);
-        process.exitCode = 1;
-        return;
-      }
-    }
-
-    if (appState !== 'running') {
-      const res = execDocker(['start', CONTAINER_NAME], {
-        encoding: 'utf-8',
-        stdio: 'inherit',
-      });
-      if (res.status !== 0) {
-        console.error(`\nFailed to start ${CONTAINER_NAME} container.`);
-        process.exitCode = 1;
-        return;
-      }
-    }
-  } else if (appState !== 'none' || dbState !== 'none') {
-    // Only one container exists
-    const existing = appState !== 'none' ? CONTAINER_NAME : DB_CONTAINER_NAME;
-    const missing = appState !== 'none' ? DB_CONTAINER_NAME : CONTAINER_NAME;
-    console.error(`Conflict: Container "${existing}" already exists, but "${missing}" does not.`);
-    console.error(`To re-provision cleanly, run: sonar-queue docker-reset && sonar-queue start`);
-    console.error(`Or remove the conflicting container: docker rm -f ${existing}`);
-    process.exitCode = 1;
+  if (!startSonarQube(appState, dbState)) {
     return;
-  } else {
-    // Neither container exists — provision via Docker Compose
-    if (!composeAvailable()) {
-      console.error('Error: Docker Compose (v2) not available.');
-      console.error('Update Docker or install the Compose plugin.');
-      process.exitCode = 1;
-      return;
-    }
-
-    ensureComposeFile(port);
-
-    const code = runCompose(['up', '-d']);
-    if (code !== 0) {
-      console.error('\nFailed to start SonarQube.');
-      process.exitCode = 1;
-      return;
-    }
   }
 
-  console.log('');
-  console.log(`SonarQube starting at ${config.hostUrl}`);
-  console.log('  → PostgreSQL: internal Docker network (not exposed to host)');
-  console.log(`  → SonarQube:  ${config.hostUrl}  (may take 30–60 s to be ready)`);
-  console.log('');
-  console.log('Check readiness:   sonar-queue doctor');
+  printStartupBanner(config.hostUrl);
 }
+
 
 export function handleStop(): void {
   if (!dockerAvailable()) {
