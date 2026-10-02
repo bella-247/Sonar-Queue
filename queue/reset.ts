@@ -9,7 +9,8 @@ export async function handleReset(
   const key = args[0];
   if (!key || !stateMap.has(key)) {
     console.error(`Error: Issue key "${key}" not found.`);
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
   const issue = stateMap.get(key)!;
   issue.status = 'pending';

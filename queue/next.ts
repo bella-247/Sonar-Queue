@@ -1,6 +1,6 @@
 import type { AgentState, TrackedIssue } from '../types.js';
 import { saveState } from '../state.js';
-import { compareIssuesPriority } from '../utils.js';
+import { compareIssuesPriority } from '../utils/priority.js';
 
 export interface NextFilterOptions {
   count: number;
@@ -28,7 +28,7 @@ export function parseFilterOptions(args: string[]): NextFilterOptions {
     } else if (arg === '--type' || arg === '-t') {
       type = args[++i]?.toUpperCase();
     } else if (/^\d+$/.test(arg)) {
-      count = parseInt(arg, 10);
+      count = Number.parseInt(arg, 10);
     }
   }
 
@@ -65,7 +65,9 @@ export function handleNext(stateMap: Map<string, TrackedIssue>, args: string[]):
   }
 
   for (const issue of pendingIssues) {
-    const loc = `${issue.file}${issue.line ? `:${issue.line}` : ''}`;
+    const file = issue.file
+    const line = issue.line ?? "N/A"
+    const loc = `${file}:${line}`;
     const attemptInfo = issue.attempts > 0 ? ` (attempt #${issue.attempts})` : '';
     console.log(`[${issue.issueKey}] ${issue.severity} ${issue.type} | ${loc} | ${issue.rule}${attemptInfo}`);
     console.log(`  ${issue.message}`);
@@ -80,7 +82,8 @@ export async function handleClaim(
   const key = args[0];
   if (!key || !stateMap.has(key)) {
     console.error(`Error: Issue key "${key}" not found.`);
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 
   const now = new Date().toISOString();

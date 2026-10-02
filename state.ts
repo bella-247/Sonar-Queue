@@ -1,8 +1,8 @@
-import fs from 'fs/promises';
-import path from 'path';
-import type { AgentState, AgentStateSummary, SonarIssuesPayload, TrackedIssue } from './types.js';
-import { getConfig } from './config.js';
-import { ISSUES_FILE, STATE_FILE } from './utils.js';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import crypto from 'node:crypto';
+import type { AgentState, AgentStateSummary, TrackedIssue } from './types.js';
+import { getConfig } from './setup/config.js';
 
 export function calculateSummary(issues: TrackedIssue[]): AgentStateSummary {
   const summary: AgentStateSummary = {
@@ -48,7 +48,7 @@ export function calculateSummary(issues: TrackedIssue[]): AgentStateSummary {
 export async function loadState(): Promise<AgentState> {
   const config = getConfig();
   try {
-    const raw = await fs.readFile(STATE_FILE, 'utf-8');
+    const raw = await fs.readFile(config.stateFile, 'utf-8');
     const parsed = JSON.parse(raw);
     return {
       project: parsed.project || config.projectKey,
@@ -86,21 +86,15 @@ export async function loadState(): Promise<AgentState> {
 }
 
 export async function saveState(state: AgentState): Promise<void> {
+  const config = getConfig();
   const issueList = Object.values(state.issues);
   state.summary = calculateSummary(issueList);
   state.lastUpdated = new Date().toISOString();
-  await fs.mkdir(path.dirname(STATE_FILE), { recursive: true });
-  await fs.writeFile(STATE_FILE, JSON.stringify(state, null, 2), 'utf-8');
-}
 
-export async function loadIssuesPayload(): Promise<SonarIssuesPayload> {
-  try {
-    const raw = await fs.readFile(ISSUES_FILE, 'utf-8');
-    return JSON.parse(raw);
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.error(`Error reading ${ISSUES_FILE}: ${message}`);
-    console.error('Make sure to run ./scripts/sonar.sh && ./scripts/sonar-export.sh first.');
-    process.exit(1);
-  }
+  const dir = path.dirname(config.stateFile);
+  await fs.mkdir(dir, { recursive: true });
+
+  const tempFile = path.join(dir, `.agent-state.${Date.now()}.${crypto.randomUUID()}.tmp`);
+  await fs.writeFile(tempFile, JSON.stringify(state, null, 2), 'utf-8');
+  await fs.rename(tempFile, config.stateFile);
 }

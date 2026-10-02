@@ -1,10 +1,4 @@
-import { getConfig } from './config.js';
-import type { TrackedIssue } from './types.js';
-
-export const PROJECT_ROOT = getConfig().projectRoot;
-export const RESULTS_DIR = getConfig().resultsDir;
-export const ISSUES_FILE = getConfig().issuesFile;
-export const STATE_FILE = getConfig().stateFile;
+import type { TrackedIssue } from '../types.js';
 
 export const SEVERITY_WEIGHT: Record<string, number> = {
   BLOCKER: 5,

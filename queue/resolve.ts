@@ -1,28 +1,29 @@
 import type { AgentState, TrackedIssue } from '../types.js';
 import { saveState } from '../state.js';
 
-export async function handleDefer(
+export async function handleResolve(
   state: AgentState,
   stateMap: Map<string, TrackedIssue>,
   args: string[]
 ): Promise<void> {
   const key = args[0];
-  const reason = args.slice(1).join(' ').trim();
+  const notes = args.slice(1).join(' ').trim();
   if (!key || !stateMap.has(key)) {
     console.error(`Error: Issue key "${key}" not found.`);
-    process.exit(1);
-  }
-  if (!reason) {
-    console.error('Error: Reason required for defer.');
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 
+  const now = new Date().toISOString();
   const issue = stateMap.get(key)!;
-  issue.status = 'deferred';
-  issue.notes = reason;
+  issue.status = 'fixed';
+  issue.fixedAt = now;
+  if (notes) {
+    issue.notes = notes;
+  }
   stateMap.set(key, issue);
 
   state.issues = Object.fromEntries(stateMap);
   await saveState(state);
-  console.log(`Deferred: ${key}`);
+  console.log(`Resolved: ${key} (awaiting scan)`);
 }

@@ -7,32 +7,17 @@ export type IssueStatus =
   | 'wont-fix'
   | 'deferred';
 
-export interface SonarIssueTextRange {
-  startLine: number;
-  endLine: number;
-  startOffset?: number;
-  endOffset?: number;
-}
-
 export interface SonarIssue {
   key: string;
   rule: string;
   severity: string;
-  component: string;
-  project: string;
-  line?: number;
-  textRange?: SonarIssueTextRange;
-  status: string;
-  resolution?: string;
-  message: string;
-  effort?: string;
-  debt?: string;
   type: string;
-}
-
-export interface SonarIssuesPayload {
-  total?: number;
-  issues: SonarIssue[];
+  component?: string;
+  file: string;
+  line?: number;
+  message: string;
+  status?: string;
+  resolution?: string;
 }
 
 export interface TrackedIssue {

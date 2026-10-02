@@ -1,7 +1,7 @@
 import type { AgentState, TrackedIssue } from '../types.js';
 import { saveState } from '../state.js';
 
-export async function handleWontFix(
+export async function handleDefer(
   state: AgentState,
   stateMap: Map<string, TrackedIssue>,
   args: string[]
@@ -10,19 +10,21 @@ export async function handleWontFix(
   const reason = args.slice(1).join(' ').trim();
   if (!key || !stateMap.has(key)) {
     console.error(`Error: Issue key "${key}" not found.`);
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
   if (!reason) {
-    console.error('Error: Reason required for wont-fix.');
-    process.exit(1);
+    console.error('Error: Reason required for defer.');
+    process.exitCode = 1;
+    return;
   }
 
   const issue = stateMap.get(key)!;
-  issue.status = 'wont-fix';
+  issue.status = 'deferred';
   issue.notes = reason;
   stateMap.set(key, issue);
 
   state.issues = Object.fromEntries(stateMap);
   await saveState(state);
-  console.log(`Wont-fix: ${key}`);
+  console.log(`Deferred: ${key}`);
 }

@@ -118,34 +118,6 @@ Sonar-Queue auto-discovers settings from:
 
 ---
 
-## 📦 How to Extract into a Standalone Repository
-
-To extract this tool into its own GitHub repository (e.g. `github.com/your-username/sonar-queue`):
-
-```bash
-# 1. Create a new directory or repo
-mkdir sonar-queue && cd sonar-queue
-
-# 2. Copy the scripts/sonar-manager contents
-cp -r /path/to/flavour-bites/scripts/sonar-manager/* .
-
-# 3. Initialize git and install dependencies
-git init
-npm install -D tsx typescript @types/node
-
-# 4. Build or publish
-npm run build
-npm publish --access public  # or use via git repository
-```
-
-Once extracted or published, any project can use it immediately:
-```bash
-npx sonar-queue init
-npx sonar-queue status
-```
-
----
-
 ## 🤖 AI Agent Workflow
 
 When pairing with AI coding agents:
