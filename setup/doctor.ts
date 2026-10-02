@@ -48,6 +48,28 @@ function checkOS(): CheckResult {
   return check('Operating system', true, `${label} (${arch})`);
 }
 
+function resolveExecutable(name: string): string {
+  const candidates = [
+    `/usr/bin/${name}`,
+    `/usr/local/bin/${name}`,
+    `/opt/homebrew/bin/${name}`,
+    `/bin/${name}`,
+  ];
+  for (const candidate of candidates) {
+    if (fsSync.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  return name;
+}
+
+function execBinary(name: string, args: string[], timeout = 5000) {
+  return spawnSync(resolveExecutable(name), args, {
+    encoding: 'utf-8',
+    timeout,
+  });
+}
+
 function checkNodeVersion(): CheckResult {
   const v = process.version;
   const major = Number.parseInt(v.slice(1).split('.')[0], 10);
@@ -56,7 +78,7 @@ function checkNodeVersion(): CheckResult {
 
 function checkNpmVersion(): CheckResult {
   try {
-    const r = spawnSync('npm', ['--version'], { encoding: 'utf-8', timeout: 3000 });
+    const r = execBinary('npm', ['--version'], 3000);
     if (r.status === 0) return check('npm', true, `v${r.stdout.trim()}`);
   } catch { /* not found */ }
   return check('npm', false, 'Not found');
@@ -64,7 +86,7 @@ function checkNpmVersion(): CheckResult {
 
 function checkDocker(): CheckResult {
   try {
-    const r = spawnSync('docker', ['--version'], { encoding: 'utf-8', timeout: 5000 });
+    const r = execBinary('docker', ['--version']);
     if (r.status === 0) return check('Docker', true, r.stdout.trim().replace('Docker version ', ''));
   } catch { /* not found */ }
   return check('Docker', false, 'Not found in PATH — https://docs.docker.com/engine/install/');
@@ -72,7 +94,7 @@ function checkDocker(): CheckResult {
 
 function checkDockerDaemon(): CheckResult {
   try {
-    const r = spawnSync('docker', ['info', '--format', '{{.ServerVersion}}'], { encoding: 'utf-8', timeout: 5000 });
+    const r = execBinary('docker', ['info', '--format', '{{.ServerVersion}}']);
     if (r.status === 0 && r.stdout.trim()) {
       return check('Docker daemon', true, 'Running');
     }
@@ -82,7 +104,7 @@ function checkDockerDaemon(): CheckResult {
 
 function checkDockerCompose(): CheckResult {
   try {
-    const r = spawnSync('docker', ['compose', 'version', '--short'], { encoding: 'utf-8', timeout: 5000 });
+    const r = execBinary('docker', ['compose', 'version', '--short']);
     if (r.status === 0) return check('Docker Compose', true, `v${r.stdout.trim()}`);
   } catch { /* not found */ }
   return check('Docker Compose', false, 'Not available — update Docker or install compose plugin');
@@ -90,11 +112,13 @@ function checkDockerCompose(): CheckResult {
 
 function checkSonarQubeContainer(): CheckResult {
   try {
-    const r = spawnSync(
-      'docker',
-      ['ps', '--filter', 'name=^sonarqube$', '--format', '{{.Names}} ({{.Status}})'],
-      { encoding: 'utf-8', timeout: 5000 }
-    );
+    const r = execBinary('docker', [
+      'ps',
+      '--filter',
+      'name=^sonarqube$',
+      '--format',
+      '{{.Names}} ({{.Status}})',
+    ]);
     if (r.status === 0) {
       const out = (r.stdout || '').trim();
       if (out) return check('SonarQube container', true, out);
@@ -106,11 +130,13 @@ function checkSonarQubeContainer(): CheckResult {
 
 function checkDbContainer(): CheckResult {
   try {
-    const r = spawnSync(
-      'docker',
-      ['ps', '--filter', 'name=^sonarqube-db$', '--format', '{{.Names}} ({{.Status}})'],
-      { encoding: 'utf-8', timeout: 5000 }
-    );
+    const r = execBinary('docker', [
+      'ps',
+      '--filter',
+      'name=^sonarqube-db$',
+      '--format',
+      '{{.Names}} ({{.Status}})',
+    ]);
     if (r.status === 0) {
       const out = (r.stdout || '').trim();
       if (out) return check('PostgreSQL container', true, out);
@@ -149,12 +175,26 @@ async function checkSonarQubeConnectivity(
   const results: CheckResult[] = [];
 
   try {
-    const res = await fetch(`${hostUrl}/api/system/ping`, {
+    const res = await fetch(`${hostUrl}/api/system/status`, {
       signal: AbortSignal.timeout(5000),
     });
-    const text = await res.text();
-    const alive = res.ok || text.trim() === 'pong';
-    results.push(check('SonarQube reachable', alive, `${hostUrl} → HTTP ${res.status}`));
+    if (res.ok) {
+      const data = (await res.json()) as { status?: string };
+      const alive = data.status === 'UP';
+      results.push(check('SonarQube reachable', alive, `${hostUrl} (status: ${data.status || 'UP'})`));
+    } else {
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers.Authorization = 'Basic ' + Buffer.from(`${token}:`).toString('base64');
+      }
+      const pingRes = await fetch(`${hostUrl}/api/system/ping`, {
+        headers,
+        signal: AbortSignal.timeout(5000),
+      });
+      const text = await pingRes.text();
+      const alive = pingRes.ok || text.trim() === 'pong' || pingRes.status === 401;
+      results.push(check('SonarQube reachable', alive, `${hostUrl} → HTTP ${pingRes.status}`));
+    }
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     results.push(check('SonarQube reachable', false, `${hostUrl} → ${msg}`));
