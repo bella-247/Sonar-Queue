@@ -120,7 +120,9 @@ function composeAvailable(): boolean {
   }
 }
 
-function getContainerState(name: string): 'running' | 'stopped' | 'none' {
+type ContainerState = 'running' | 'stopped' | 'none';
+
+function getContainerState(name: string): ContainerState {
   try {
     const res = execDocker(['inspect', '--format', '{{.State.Status}}', name], {
       encoding: 'utf-8',
@@ -135,7 +137,7 @@ function getContainerState(name: string): 'running' | 'stopped' | 'none' {
   }
 }
 
-function containerStatus(): 'running' | 'stopped' | 'none' {
+function containerStatus(): ContainerState {
   const app = getContainerState(CONTAINER_NAME);
   const db = getContainerState(DB_CONTAINER_NAME);
   if (app === 'running' && db === 'running') return 'running';
@@ -177,8 +179,8 @@ function startContainer(name: string): boolean {
 }
 
 function startExistingContainers(
-  appState: 'running' | 'stopped' | 'none',
-  dbState: 'running' | 'stopped' | 'none'
+  appState: ContainerState,
+  dbState: ContainerState
 ): boolean {
   if (dbState !== 'running' && !startContainer(DB_CONTAINER_NAME)) {
     return false;
@@ -189,7 +191,7 @@ function startExistingContainers(
   return true;
 }
 
-function handleContainerConflict(appState: 'running' | 'stopped' | 'none'): void {
+function handleContainerConflict(appState: ContainerState): void {
   const existing = appState !== 'none' ? CONTAINER_NAME : DB_CONTAINER_NAME;
   const missing = appState !== 'none' ? DB_CONTAINER_NAME : CONTAINER_NAME;
   console.error(`Conflict: Container "${existing}" already exists, but "${missing}" does not.`);
@@ -218,8 +220,8 @@ function provisionWithCompose(): boolean {
 }
 
 function startSonarQube(
-  appState: 'running' | 'stopped' | 'none',
-  dbState: 'running' | 'stopped' | 'none'
+  appState: ContainerState,
+  dbState: ContainerState
 ): boolean {
   if (appState !== 'none' && dbState !== 'none') {
     return startExistingContainers(appState, dbState);
