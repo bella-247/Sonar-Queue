@@ -1,7 +1,7 @@
 {
   "name": "sonar-queue",
   "version": "1.0.0",
-  "description": "Token-optimized SonarQube queue manager and AI agent remediation engine",
+  "description": "Token-optimized SonarQube queue manager and issue resolution engine",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -25,7 +25,7 @@
     "sonarqube",
     "code-quality",
     "ai-agent",
-    "remediation-queue",
+    "resolution-queue",
     "token-optimization"
   ],
   "author": "",

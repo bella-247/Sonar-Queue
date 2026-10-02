@@ -2,7 +2,7 @@
 
 <div align="center">
 
-**A systematic AI agent remediation engine and local developer tool for SonarQube.**
+**A systematic issue resolution engine and local developer tool for SonarQube.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node: >=18](https://img.shields.io/badge/Node-%3E%3D18-brightgreen.svg)](https://nodejs.org/)
@@ -21,7 +21,7 @@ When coding agents (Claude, Cursor, OpenCode, Antigravity) work directly with So
 
 1. **Context Window Flooding (The Token Tax)**:
    A standard SonarQube analysis export contains hundreds of issues with ~30 metadata fields each (flows, hashes, debt, AST locations). Ingesting this burns **30,000–50,000 tokens** per turn, causing inference latency spikes, high API costs, and context amnesia.
-2. **Missing Remediation Lifecycle**:
+2. **Missing Resolution Lifecycle**:
    SonarQube is an *analysis engine*, not a *workflow coordinator*. It has no server-side concept of:
    - Who claimed an issue (`investigating`)
    - How many fix attempts have occurred (`attempts: 2`)
@@ -33,7 +33,7 @@ When coding agents (Claude, Cursor, OpenCode, Antigravity) work directly with So
 
 ## 🎯 The Solution: Sonar Queue
 
-`sonar-queue` sits between SonarQube and your coding agent as a **local remediation workflow engine**:
+`sonar-queue` sits between SonarQube and your coding agent as a **local issue resolution engine**:
 
 ```text
  ┌───────────────────────┐
@@ -42,7 +42,7 @@ When coding agents (Claude, Cursor, OpenCode, Antigravity) work directly with So
              │ Lean ~7-field fetch
              ▼
  ┌───────────────────────┐
- │      SONAR QUEUE      │  Remediation Truth (agent-state.json)
+ │      SONAR QUEUE      │  Resolution Truth (agent-state.json)
  │  • Priority Heuristic │  - File-cohesion & severity sorting
  │  • Claim & Lock       │  - Tracks attempts, timestamps, notes
  │  • Zero-Slurp Engine  │  - Formats issues into dense ~35-token lines
@@ -103,7 +103,7 @@ npx sonar-queue sync
 
 ---
 
-## 🔄 The Remediation Workflow
+## 🔄 The Resolution Workflow
 
 ### 1. View Status
 ```bash
@@ -179,10 +179,10 @@ npx sonar-queue scan && npx sonar-queue sync
 | `sonar-queue sync` | Wait for server CE task and reconcile live issues into `agent-state.json` |
 | `sonar-queue export` | Fetch lean issues from SonarQube and sync directly to queue |
 
-### Queue & Remediation
+### Queue & Resolution
 | Command | Description |
 | :--- | :--- |
-| `sonar-queue status [--file <p>]` | Dense 2-line dual summary of active issues and remediation queue state |
+| `sonar-queue status [--file <p>]` | Dense 2-line dual summary of active issues and resolution queue state |
 | `sonar-queue next [N] [--file <p>]` | Peek at next N prioritized pending issues without mutating state |
 | `sonar-queue claim <key>` | Claim an issue (`pending` $\rightarrow$ `investigating`), increments attempt counter |
 | `sonar-queue claim-next [N]` | Atomically claim next N filtered issues |
@@ -214,7 +214,7 @@ This skill works natively with **Cursor**, **Claude Code**, **OpenCode**, and **
 | :--- | :--- | :--- |
 | **Payload per issue** | ~30 fields (AST ranges, debt, hashes) | **7 fields** (`key`, `rule`, `file`, `line`, `severity`, `type`, `message`) |
 | **Tokens for 20 issues** | ~12,000 – 18,000 tokens | **~700 tokens** (96% savings) |
-| **Remediation State** | ❌ None (stateless) | ✅ Claims, attempts, timestamps, notes |
+| **Resolution State** | ❌ None (stateless) | ✅ Claims, attempts, timestamps, notes |
 | **Regression Detection**| ❌ Manual | ✅ Automated post-scan verification |
 | **Grouping Heuristic** | ❌ Arbitrary database order | ✅ Priority sort by severity + file cohesion |
 

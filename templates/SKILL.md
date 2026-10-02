@@ -1,13 +1,13 @@
 ---
 name: sonar-scanner
-description: 'Systematic SonarQube queue management and batch remediation engine for large & small codebases. Use when analyzing SonarQube findings, claiming prioritized issues, fixing code smells/bugs, or tracking remediation progress without token waste.'
+description: 'Systematic SonarQube queue management and batch resolution engine for large & small codebases. Use when analyzing SonarQube findings, claiming prioritized issues, fixing code smells/bugs, or tracking resolution progress without token waste.'
 license: MIT
 metadata:
   author: engineering
   version: "1.1.0"
 ---
 
-# /sonar-scanner — Universal SonarQube Remediation Engine
+# /sonar-scanner — Universal SonarQube Resolution Engine
 
 A production-grade, token-optimized protocol for analyzing SonarQube findings, claiming prioritized issues in cohesive batches, and maintaining persistent state across sessions in **any software project**, especially large-scale codebases.
 
@@ -71,7 +71,7 @@ Every tracked issue in `sonarqube-results/agent-state.json` is strictly managed 
 
 ---
 
-## 4. Remediation Workflow (Disciplined Batches)
+## 4. Resolution Workflow (Disciplined Batches)
 
 ```text
 [1. Scope & Query]
@@ -96,9 +96,10 @@ Every tracked issue in `sonarqube-results/agent-state.json` is strictly managed 
 ### Step-by-Step Execution:
 
 1. **Scope the Batch**:
+   - Default batch: `npx sonar-queue next 5 --severity BLOCKER,CRITICAL,MAJOR`
    - Pick a cohesive file or directory:
      ```bash
-     npx sonar-queue next 5 --file src/features/orders
+     npx sonar-queue next 5 --file src/features/orders --severity BLOCKER,CRITICAL
      ```
 2. **Claim the Issues**:
    - Claim the batch to lock state:
@@ -106,7 +107,7 @@ Every tracked issue in `sonarqube-results/agent-state.json` is strictly managed 
      npx sonar-queue claim-next 5 --file src/features/orders
      ```
 3. **Inspect Target File**:
-   - Open only the specific file and read the targeted line range.
+   - Use your editor or file reading tools to view the exact lines: read from `line - 5` to `line + 5`. Do not guess the context.
    - Check if there are other pending issues in the same file to fix concurrently:
      ```bash
      npx sonar-queue next 10 --file path/to/TargetFile.tsx
@@ -124,13 +125,13 @@ Every tracked issue in `sonarqube-results/agent-state.json` is strictly managed 
    ```bash
    npx sonar-queue resolve <key> "Extracted helper function to reduce complexity"
    ```
-7. **Repeat or Synchronize**:
-   - Proceed to the next batch.
-   - When the user triggers a full scan:
+7. **⚠ REQUIRED: Sync & Verify**:
+   - After resolving a batch, you MUST run a sync to verify fixes and detect regressions before continuing:
      ```bash
      npx sonar-queue sync
      ```
-     This fetches lean issues from SonarQube, reconciles the queue, verifies fixes, and detects regressions in one step.
+8. **When Fix Fails (Regression)**:
+   - If `sync` reopens an issue, read the regression note in `agent-state.json`, adjust your approach, re-claim, and re-resolve.
 
 ---
 
@@ -146,6 +147,7 @@ Every tracked issue in `sonarqube-results/agent-state.json` is strictly managed 
 | **S2871** | Alphabetical Sorting | Use `(a, b) => a.localeCompare(b)` instead of default `.sort()` on strings. |
 | **S6848 / S6819** | Accessibility / Role | Replace `role="button"` on non-interactive elements with semantic `<button>` elements. |
 | **S2245** | Pseudo-Random Numbers | Use `crypto.randomUUID()` or `crypto.getRandomValues()` instead of `Math.random()`. |
+| **Unknown Rule** | Any | If rule not in table: search rule key on rules.sonarsource.com, apply minimal fix matching principle #1. |
 
 ---
 
@@ -153,6 +155,8 @@ Every tracked issue in `sonarqube-results/agent-state.json` is strictly managed 
 
 1. **Never Slurp**: Never read raw SonarQube exports. Always use `sonar-queue next` and `status` (~35 tokens/issue).
 2. **No Autonomous Scans**: Never run `sonar-scanner` unless explicitly instructed by the user.
-3. **Always Commit State**: Always run `resolve`, `wontfix`, `falsepositive`, or `defer` so work is preserved across turns.
+3. **Always Commit State**: Always run `resolve`, `wontfix`, `falsepositive`, or `defer` so work is preserved across turns. Keep your `<reason>` concise and under 100 characters (e.g. `'Extracted loop body to private method'`).
 4. **File-Cohesive Batches**: Fix multiple issues in the same file together rather than jumping across modules.
 5. **No Blind Deletions**: Never delete tests or suppress compiler errors merely to silence Sonar warnings.
+6. **Empty Queue**: If `sonar-queue next` returns no pending issues, stop. You have successfully cleared the queue.
+7. **Error Recovery**: If a `sonar-queue` command fails (or scanner exits non-zero), read the stderr output, fix your syntax, and try again. Do not silently ignore errors.
