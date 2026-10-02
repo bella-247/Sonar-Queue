@@ -40,7 +40,7 @@
     "ai-agent",
     "resolution-queue",
     "token-optimization",
-    "cli",
+    "cli"
   ],
   "author": "Abel Mekonen <abelmekonen247@gmail.com>",
   "license": "MIT",
